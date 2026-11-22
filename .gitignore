@@ -1,0 +1,39 @@
+# secrets / editor
+.env
+.vscode
+.clinerules
+.codex
+.DS_Store
+
+# notes
+_notes/private
+_notes/.obsidian
+
+# ex6
+.ex6.history
+.ex6.history/**
+.EX6_CONTEXT_DUMP.txt
+ex6.bat
+pyrightconfig.json
+_ex6/love2d-api
+
+# python
+__pycache__
+*.pyc
+
+# lua / native
+jit/
+lua51.dll
+
+# art source
+*.kra
+*.kra~
+
+# scratch
+TEMP_NOTEPAD.md
+PLAYTESTER_NOTEPAD.md
+.workspace/
+
+# build output
+build/
+dist/

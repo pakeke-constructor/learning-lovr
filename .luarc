@@ -1,0 +1,8 @@
+{
+    "workspace.ignoreDir": [
+        "_kapathia/**",
+        "_catx11/**",
+        "_ex6/**",
+        "_notes/**"
+    ]
+}
