@@ -11,7 +11,7 @@ vec4 lovrmain() {
 }
 ]]
 
--- Fragment stage: classic Phong = ambient + diffuse + specular.
+-- Fragment stage: classic Phong = ambient + diffuse + specular, on top of texture * color.
 -- Loose uniforms get set from Lua with pass:send(name, value).
 -- `Color` already contains pass:setColor() * vertex color.
 local phongFragment = [[
@@ -29,8 +29,10 @@ vec4 lovrmain() {
   float diffuse = max(dot(N, L), 0.0);
   float specular = diffuse > 0.0 ? pow(max(dot(R, V), 0.0), shininess) : 0.0;
 
-  vec3 rgb = Color.rgb * (ambient + diffuse * lightColor) + specular * lightColor;
-  return vec4(rgb, Color.a);
+  // ColorTexture = material's texture (pass:setMaterial); defaults to 1x1 white, so untextured draws are unaffected.
+  vec4 albedo = Color * getPixel(ColorTexture, UV);
+  vec3 rgb = albedo.rgb * (ambient + diffuse * lightColor) + specular * lightColor;
+  return vec4(rgb, albedo.a);
 }
 ]]
 
