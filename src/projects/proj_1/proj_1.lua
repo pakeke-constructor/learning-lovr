@@ -1,67 +1,137 @@
+-- proj_1: primitives + passes + basic Phong lighting.
+--
+-- How a frame works in LOVR:
+--   lovr.draw(pass) receives a Pass for the window/headset. A Pass is a *recorder*:
+--   every pass:xyz() call records a draw (with the current state: color, shader,
+--   transform stack...). LOVR submits the pass to the GPU after lovr.draw returns.
+--   State set on the pass (setColor, setShader, transforms) sticks until changed,
+--   and is reset at the start of every frame.
+
 local P = {}
-local world, ground, boxes, controllerBoxes
+local phong
+
+-- Vertex stage: DefaultPosition = Projection * View * Transform * VertexPosition.
+-- LOVR also fills varyings for us: PositionWorld, Normal (world space), Color, UV.
+local vertexCode = [[
+vec4 lovrmain() {
+  return DefaultPosition;
+}
+]]
+
+-- Fragment stage: classic Phong = ambient + diffuse + specular.
+-- Loose uniforms get set from Lua with pass:send(name, value).
+-- `Color` already contains pass:setColor() * vertex color.
+local fragmentCode = [[
+uniform vec3 lightPos;
+uniform vec3 lightColor;
+uniform float shininess;
+
+vec4 lovrmain() {
+  vec3 N = normalize(Normal);
+  vec3 L = normalize(lightPos - PositionWorld);
+  vec3 V = normalize(CameraPositionWorld - PositionWorld);
+  vec3 R = reflect(-L, N);
+
+  float ambient = 0.15;
+  float diffuse = max(dot(N, L), 0.0);
+  float specular = diffuse > 0.0 ? pow(max(dot(R, V), 0.0), shininess) : 0.0;
+
+  vec3 rgb = Color.rgb * (ambient + diffuse * lightColor) + specular * lightColor;
+  return vec4(rgb, Color.a);
+}
+]]
 
 function P.load()
-  world = lovr.physics.newWorld()
-
-  -- Create the ground
-  ground = world:newBoxCollider(0, -1, 0, 50, 2, 50)
-  ground:setKinematic(true)
-  ground:setFriction(1.0)
-
-  -- Create boxes!
-  boxes = {}
-  for x = -1, 1, .25 do
-    for y = .125, 2, .2499 do
-      local box = world:newBoxCollider(x, y, -2 - y / 5, .25)
-      table.insert(boxes, box)
-    end
-  end
-
-  controllerBoxes = {}
-
-  lovr.timer.step() -- Reset the timer before the first update
-  lovr.graphics.setBackgroundColor(.8, .8, .8)
-end
-
-function P.update(dt)
-  -- Update the physics simulation
-  world:update(dt)
-
-  -- Place boxes on controllers
-  for i, hand in ipairs(lovr.headset.getHands()) do
-    if not controllerBoxes[i] then
-      controllerBoxes[i] = world:newBoxCollider(0, 0, 0, .25)
-      controllerBoxes[i]:setKinematic(true)
-    end
-    controllerBoxes[i]:setPose(lovr.headset.getPose(hand))
-  end
-end
-
--- A helper function for drawing boxes
-local function drawBox(pass, box)
-  local x, y, z = box:getPosition()
-  pass:cube(x, y, z, .25, box:getOrientation())
+  phong = lovr.graphics.newShader(vertexCode, fragmentCode)
+  lovr.graphics.setBackgroundColor(0.08, 0.08, 0.1)
 end
 
 function P.draw(pass)
-  pass:setShader(shader)
+  local t = lovr.timer.getTime()
+  local lx, ly, lz = math.cos(t) * 2.5, 2.5, -3 + math.sin(t) * 2.5
 
-  pass:setColor(1, 0, 0)
-  for i, box in ipairs(boxes) do
-    drawBox(pass, box)
-  end
+  -- 1) Lit geometry: bind the shader, then send uniforms.
+  pass:setShader(phong)
+  pass:send('lightPos', { lx, ly, lz })
+  pass:send('lightColor', { 1, 0.95, 0.85 })
+  pass:send('shininess', 32)
 
-  if lovr.headset.getDriver() ~= 'simulator' then
-    pass:setColor(0, 0, 1)
-    for i, box in ipairs(controllerBoxes) do
-      drawBox(pass, box)
+  -- Ground. Planes face +Z by default, so rotate -90deg around X to face up.
+  pass:setColor(0.35, 0.35, 0.4)
+  pass:plane(0, 0, -3, 10, 10, -math.pi / 2, 1, 0, 0)
+
+  -- Row of primitives. Signature pattern: (x, y, z, size..., angle, ax, ay, az).
+  local y = 1.2
+  pass:setColor(0.9, 0.2, 0.2)
+  pass:cube(-3, y, -3, 0.6, t, 0, 1, 0)
+
+  pass:setColor(0.9, 0.6, 0.2)
+  pass:box(-1.8, y, -3, 0.8, 0.4, 0.4, t, 1, 1, 0)
+
+  pass:setColor(0.9, 0.9, 0.2)
+  pass:sphere(-0.6, y, -3, 0.35)
+
+  -- Cylinder/cone/capsule run along their local Z axis.
+  pass:setColor(0.2, 0.9, 0.3)
+  pass:cylinder(0.6, y, -3, 0.25, 0.7, math.pi / 2, 1, 0, 0)
+
+  -- Cone origin is the center of its base; tip points down local -Z (rotated to +Y here).
+  pass:setColor(0.2, 0.8, 0.9)
+  pass:cone(1.8, y - 0.35, -3, 0.3, 0.7, math.pi / 2, 1, 0, 0)
+
+  pass:setColor(0.3, 0.4, 1.0)
+  pass:capsule(3, y, -3, 0.2, 0.5, t, 0, 0, 1)
+
+  -- 2) Transform stack: push, modify, draw, pop. Draws inherit the current transform.
+  pass:push()
+    pass:translate(0, 0.6, -5)
+    pass:rotate(t * 0.5, 0, 1, 0)
+    pass:setColor(0.8, 0.3, 0.9)
+    pass:torus(0, 0, 0, 0.6, 0.15, math.pi / 2, 1, 0, 0)
+
+    -- Nested: little spheres orbiting, positioned relative to the torus.
+    for i = 1, 6 do
+      local a = i / 6 * math.pi * 2
+      pass:push()
+        pass:rotate(a, 0, 1, 0)
+        pass:translate(1.2, 0, 0)
+        pass:scale(0.15)
+        pass:setColor(1, 1, 1)
+        pass:sphere()
+      pass:pop()
     end
-  end
-end
+  pass:pop()
 
-function P.cleanup()
-  world:destroy()
+  -- Wireframe is also just pass state.
+  pass:setWireframe(true)
+  pass:setColor(0.6, 0.9, 0.6)
+  pass:sphere(-3, 0.6, -5, 0.4)
+  pass:setWireframe(false)
+
+  -- 3) Unlit stuff: setShader() with no args returns to the default shader.
+  pass:setShader()
+
+  -- Light marker.
+  pass:setColor(1, 0.95, 0.85)
+  pass:sphere(lx, ly, lz, 0.08)
+
+  -- Lines and points have no normals, so lighting makes no sense for them.
+  pass:setColor(1, 1, 1, 0.4)
+  pass:line(lx, ly, lz, lx, 0, lz)
+  pass:points(lx, 0.01, lz)
+
+  -- World axes.
+  pass:setColor(1, 0, 0) pass:line(0, 0.01, -3, 1, 0.01, -3)
+  pass:setColor(0, 1, 0) pass:line(0, 0.01, -3, 0, 1, -3)
+  pass:setColor(0, 0, 1) pass:line(0, 0.01, -3, 0, 0.01, -2)
+
+  -- Flat circle outline (style 'line') vs filled ('fill').
+  pass:setColor(1, 1, 0.4)
+  pass:circle(3, 0.6, -5, 0.4, 0, 0, 1, 0, 'line')
+
+  -- Text uses LOVR's built-in font shader when no custom shader is set.
+  pass:setColor(1, 1, 1)
+  pass:text('proj_1: primitives + phong', 0, 2.3, -3, 0.2)
 end
 
 return P
