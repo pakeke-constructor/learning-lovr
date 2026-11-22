@@ -1,2 +1,2 @@
 
-require("src.proj_1.proj_1")
+require("src.projects.proj_1.proj_1")
