@@ -12,6 +12,7 @@ from _ex6.skills import load_skill
 from _ex6.lua_coding_style import SYSTEM_PROMPT_CODING_STYLE
 from _ex6.web_tools import websearch_agent
 from _ex6.love2d_docs.love2d_docs import love2d_docs
+from _ex6.lovr_docs.lovr_docs import lovr_docs
 from _ex6.provider_openrouter import cache_manually
 from _ex6.workspace import sweep_workspace
 import _ex6.agents_long_horizon as h
@@ -72,14 +73,14 @@ def find_sound_effect(ctx: ex6.Context, query: str):
 def horizon(tui, tasks_path: str = "_notes/_HORIZON_TASKS.md"):
     """Run unattended tasks from a markdown task file."""
     agents = h.default_agents(tui.app)
-    agents["main"] = agents["main"].with_tools([find_sound_effect])
+    agents["main"] = agents["main"].with_tools([find_sound_effect, lovr_docs])
     h.run_horizon(tui.app, tasks_path, agents)
 
 
 
 def setup(app: ex6.App):
     sweep_workspace(app)
-    auto_setup(app, [find_sound_effect])
+    auto_setup(app, [find_sound_effect, lovr_docs])
 
 
 

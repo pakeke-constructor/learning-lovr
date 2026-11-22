@@ -3,13 +3,7 @@ LOVR API documentation lookup tool for coding agents.
 
 Data: lovr_docs.json, generated from lovr-docs v0.19.0 api/init.lua via lua_to_json.lua.
 
-Usage:
-  lovr_docs("lovr.graphics")            -- list module functions, objects, enums
-  lovr_docs("lovr.graphics.newBuffer")  -- look up a module function
-  lovr_docs("lovr.draw")                -- look up a callback
-  lovr_docs("Pass")                     -- look up an object and list its methods
-  lovr_docs("Pass:cube")                -- look up a method on an object
-  lovr_docs("DrawStyle")                -- look up an enum
+Run directly for a smoke test (needs ex6 on PYTHONPATH).
 '''
 
 from __future__ import annotations
@@ -119,29 +113,81 @@ def _fmt_enum(e: dict, verbosity: int):
     return "\n".join(lines)
 
 
+def _norm(q: str):
+    q = q.strip().strip("`").removesuffix("()").replace(":", ".").lower()
+    return q.removeprefix("lovr.") if q != "lovr" else q
+
+
+_ALL = list(_BY_KEY.items())
+_BY_NORM: dict[str, list[str]] = {}
+_BY_NAME: dict[str, list[str]] = {}  # bare name: "newBuffer", "cube"
+for _k in _BY_KEY:
+    _BY_NORM.setdefault(_norm(_k), []).append(_k)
+    _BY_NAME.setdefault(_norm(_k).rsplit(".", 1)[-1], []).append(_k)
+
+
+def _summary(key: str):
+    return f"  {key} - {_BY_KEY[key][1].get('summary', '')}"
+
+
+def _search(term: str, limit: int = 15):
+    words = _norm(term).replace(".", " ").split()
+    hits = []
+    for key, (_, item) in _ALL:
+        name, summary = key.lower(), item.get("summary", "").lower()
+        text = f"{name} {summary} {item.get('description', '').lower()}"
+        if all(w in text for w in words):
+            hits.append((-3 * sum(w in name for w in words) - sum(w in summary for w in words), len(key), key))
+    keys = [k for *_, k in sorted(hits)]
+    if not keys:
+        import difflib
+        close = difflib.get_close_matches(_norm(term), list(_BY_NORM) + list(_BY_NAME), n=limit, cutoff=0.6)
+        keys = list(dict.fromkeys(k for c in close for k in _BY_NORM.get(c, []) + _BY_NAME.get(c, [])))
+    more = f"\n  ...{len(keys) - limit} more, refine search" if len(keys) > limit else ""
+    return "\n".join(_summary(k) for k in keys[:limit]) + more
+
+
+def _lookup(term: str, verbosity: int):
+    keys = [term] if term in _BY_KEY else _BY_NORM.get(_norm(term)) or _BY_NAME.get(_norm(term), [])
+    if len(keys) == 1:
+        kind, item = _BY_KEY[keys[0]]
+        return {"fn": _fmt_fn, "module": _fmt_module, "object": _fmt_object, "enum": _fmt_enum}[kind](item, verbosity)
+    if keys:
+        return f"'{term}' is ambiguous:\n" + "\n".join(_summary(k) for k in keys)
+    found = _search(term)
+    return f"No exact match for '{term}'. " + (f"Search results:\n{found}" if found else 'Nothing found. Try lovr_docs("lovr").')
+
+
 def lovr_docs(ctx: ex6.Context, query: str, verbosity: int = 0):
     """
-    Look up LOVR (0.19) API docs. Returns signatures, descriptions, and method lists.
-    query formats:
-      lovr_docs("lovr")                     - list callbacks + top-level modules
-      lovr_docs("lovr.graphics")            - list module functions, objects, enums
-      lovr_docs("lovr.graphics.newBuffer")  - look up a module function
-      lovr_docs("lovr.draw")                - look up a callback
-      lovr_docs("Pass")                     - look up an object and list its methods
-      lovr_docs("Pass:cube")                - look up a method on an object
-      lovr_docs("DrawStyle")                - look up an enum
-      lovr_docs("vector.angle")             - vector/quaternion are global modules (not under lovr.)
-    verbosity: 0 = signatures only (default), 1 = full descriptions, args, notes, examples."""
-    kind, item = _BY_KEY.get(query.strip(), (None, None))
-    if not item:
-        return f"'{query}' not found. Try lovr_docs(\"lovr\") to list modules and callbacks."
-    fmt = {"fn": _fmt_fn, "module": _fmt_module, "object": _fmt_object, "enum": _fmt_enum}[kind]
-    return fmt(item, verbosity)
+    Look up the LOVR 0.19 API docs.
+
+    Examples:
+      lovr_docs("lovr")                    # list all callbacks and modules (start here)
+      lovr_docs("lovr.graphics")           # list a module's functions, objects, enums
+      lovr_docs("lovr.graphics.newBuffer") # function signatures
+      lovr_docs("Pass")                    # list an object's methods
+      lovr_docs("Pass:cube")               # method signatures
+      lovr_docs("DrawStyle")               # enum values
+      lovr_docs("Pass:cube, Pass:sphere")  # several lookups in one call, comma-separated
+
+    You don't need exact names. These all find the same thing:
+      "lovr.graphics.newBuffer", "graphics.newBuffer", "newBuffer", "newbuffer"
+    Same for methods: "Pass:cube" and "pass.cube" both work.
+
+    If nothing matches exactly, the query is used as a keyword search, e.g. "texture filter".
+
+    verbosity=0 gives a one-line summary and the signatures. Use verbosity=1 for full descriptions, argument docs, notes and examples."""
+    terms = [t for t in query.split(",") if t.strip()]
+    if not terms:
+        return lovr_docs(ctx, "lovr", verbosity)
+    out = [_lookup(t.strip(), verbosity) for t in terms]
+    return out[0] if len(out) == 1 else "\n\n".join(f"=== {t.strip()} ===\n{o}" for t, o in zip(terms, out))
 
 
 if __name__ == "__main__":
-    for q, v in [("lovr", 0), ("lovr.graphics", 0), ("lovr.draw", 0), ("lovr.graphics.newBuffer", 1),
-                 ("Pass", 0), ("Pass:cube", 0), ("DrawStyle", 0), ("Mat4", 0), ("vector", 0), ("vector.angle", 0), ("nope", 0)]:
-        print(f"=== {q} v{v} ===")
-        print(lovr_docs(None, q, v)[:1200])
+    for q, v in [("lovr", 0), ("graphics", 0), ("Pass:draw", 0), ("TEXTURE", 0), ("draw", 0), ("newBuffer", 1), ("pass.cube", 0), ("Pass:cube, Mat4:lookAt, DrawStyle", 0),
+                 ("getWidth", 0), ("texture filter", 0), ("newBufer", 0), ("vector.angle", 0), ("xyzzy", 0)]:
+        print(f"##### {q} v{v}")
+        print(lovr_docs(None, q, v)[:1500])
         print()
