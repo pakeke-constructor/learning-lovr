@@ -8,7 +8,11 @@ Pass {
     drawCommands: DrawCommand[] -- turned into a vk_CommandBuffer
 
     transform: Mat4;
-    color: Color; blendMode: BlendMode, depthTest: DepthTest
+    state: {
+        shader: Shader, material: Material, font: Font
+        color: Color
+        blendMode, depthTest, depthWrite, cullMode, winding, wireframe, stencil, ...
+    }
 
     camera: Camera -- :setView stuff
     -- (can have multiple, e.g. cubemap renderer)
