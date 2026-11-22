@@ -46,4 +46,42 @@ function H.light(pass, lx, ly, lz, color, shininess)
   pass:send('shininess', shininess or 32)
 end
 
+-- Default fly camera -----------------------------------------------------------
+-- Left-drag to look, WASD move, Shift fast. Wired up in main.lua.
+
+local cam = {}
+H.camera = cam
+
+-- Set camera position/orientation; omitted args fall back to defaults.
+function cam.set(x, y, z, yaw, pitch)
+  cam.x, cam.y, cam.z = x or 0, y or 1.7, z or 0
+  cam.yaw, cam.pitch = yaw or 0, pitch or 0
+end
+cam.set()
+
+function cam.update(dt)
+  local down = lovr.system.isKeyDown
+  local speed = (down('lshift', 'rshift') and 8 or 3) * dt
+  local f = (down('w') and 1 or 0) - (down('s') and 1 or 0)
+  local r = (down('d') and 1 or 0) - (down('a') and 1 or 0)
+  local s, c = math.sin(cam.yaw), math.cos(cam.yaw)
+  local ps, pc = math.sin(cam.pitch), math.cos(cam.pitch)
+  -- forward = -Z rotated by pitch (X) then yaw (Y) = (-s*pc, ps, -c*pc); right = (c, 0, -s)
+  cam.x = cam.x + (-s * pc * f + c * r) * speed
+  cam.y = cam.y + ps * f * speed
+  cam.z = cam.z + (-c * pc * f - s * r) * speed
+end
+
+function cam.mousemoved(x, y, dx, dy)
+  if not lovr.system.isMouseDown(1) then return end
+  cam.yaw = cam.yaw - dx * 0.004
+  cam.pitch = math.max(-1.5, math.min(1.5, cam.pitch - dy * 0.004))
+end
+
+-- setViewPose takes the camera's pose (camera -> world); LOVR inverts it into the view matrix.
+function cam.apply(pass)
+  local pose = lovr.math.mat4():translate(cam.x, cam.y, cam.z):rotate(cam.yaw, 0, 1, 0):rotate(cam.pitch, 1, 0, 0)
+  pass:setViewPose(1, pose)
+end
+
 return H

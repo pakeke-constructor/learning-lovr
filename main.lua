@@ -1,3 +1,6 @@
+local H = require("src.helper")
+local cam = H.camera
+
 local projects, current = {}, {}
 local dirs = lovr.filesystem.getDirectoryItems("src/projects")
 table.sort(dirs)
@@ -9,13 +12,28 @@ local function switch(p)
   if not p then return end
   if current.cleanup then current.cleanup() end
   current = p
+  cam.set()
   if p.load then p.load() end
 end
 
-for _, name in ipairs({ "update", "draw", "mousepressed", "mousemoved" }) do
-  lovr[name] = function(...)
-    if current[name] then return current[name](...) end
-  end
+function lovr.mousepressed(...)
+  if current.mousepressed then current.mousepressed(...) end
+end
+
+function lovr.update(dt)
+  cam.update(dt)
+  if current.update then current.update(dt) end
+end
+
+-- Camera applied first; a project can override with its own pass:setViewPose in draw.
+function lovr.draw(pass)
+  cam.apply(pass)
+  if current.draw then return current.draw(pass) end
+end
+
+function lovr.mousemoved(...)
+  cam.mousemoved(...)
+  if current.mousemoved then current.mousemoved(...) end
 end
 
 function lovr.load() switch(projects[1]) end
