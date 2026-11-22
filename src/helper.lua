@@ -47,7 +47,7 @@ function H.light(pass, lx, ly, lz, color, shininess)
 end
 
 -- Default fly camera -----------------------------------------------------------
--- Left-drag to look, WASD move, Shift fast. Wired up in main.lua.
+-- Left click to lock mouse and look, right click to release. WASD move, Shift fast. Wired up in main.lua.
 
 local cam = {}
 H.camera = cam
@@ -72,8 +72,14 @@ function cam.update(dt)
   cam.z = cam.z + (-c * pc * f - s * r) * speed
 end
 
+-- Left click locks the mouse (relative mode: hidden, still reports dx/dy); right click releases it.
+function cam.mousepressed(x, y, button)
+  if button == 1 then lovr.system.setMouseMode('relative') end
+  if button == 2 then lovr.system.setMouseMode('normal') end
+end
+
 function cam.mousemoved(x, y, dx, dy)
-  if not lovr.system.isMouseDown(1) then return end
+  if lovr.system.getMouseMode() ~= 'relative' then return end
   cam.yaw = cam.yaw - dx * 0.004
   cam.pitch = math.max(-1.5, math.min(1.5, cam.pitch - dy * 0.004))
 end

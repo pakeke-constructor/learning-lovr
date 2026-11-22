@@ -17,6 +17,7 @@ local function switch(p)
 end
 
 function lovr.mousepressed(...)
+  cam.mousepressed(...)
   if current.mousepressed then current.mousepressed(...) end
 end
 
