@@ -7,42 +7,10 @@
 --   State set on the pass (setColor, setShader, transforms) sticks until changed,
 --   and is reset at the start of every frame.
 
+local H = require('src.helper')
 local P = {}
-local phong
-
--- Vertex stage: DefaultPosition = Projection * View * Transform * VertexPosition.
--- LOVR also fills varyings for us: PositionWorld, Normal (world space), Color, UV.
-local vertexCode = [[
-vec4 lovrmain() {
-  return DefaultPosition;
-}
-]]
-
--- Fragment stage: classic Phong = ambient + diffuse + specular.
--- Loose uniforms get set from Lua with pass:send(name, value).
--- `Color` already contains pass:setColor() * vertex color.
-local fragmentCode = [[
-uniform vec3 lightPos;
-uniform vec3 lightColor;
-uniform float shininess;
-
-vec4 lovrmain() {
-  vec3 N = normalize(Normal);
-  vec3 L = normalize(lightPos - PositionWorld);
-  vec3 V = normalize(CameraPositionWorld - PositionWorld);
-  vec3 R = reflect(-L, N);
-
-  float ambient = 0.15;
-  float diffuse = max(dot(N, L), 0.0);
-  float specular = diffuse > 0.0 ? pow(max(dot(R, V), 0.0), shininess) : 0.0;
-
-  vec3 rgb = Color.rgb * (ambient + diffuse * lightColor) + specular * lightColor;
-  return vec4(rgb, Color.a);
-}
-]]
 
 function P.load()
-  phong = lovr.graphics.newShader(vertexCode, fragmentCode)
   lovr.graphics.setBackgroundColor(0.08, 0.08, 0.1)
 end
 
@@ -50,11 +18,8 @@ function P.draw(pass)
   local t = lovr.timer.getTime()
   local lx, ly, lz = math.cos(t) * 2.5, 2.5, -3 + math.sin(t) * 2.5
 
-  -- 1) Lit geometry: bind the shader, then send uniforms.
-  pass:setShader(phong)
-  pass:send('lightPos', { lx, ly, lz })
-  pass:send('lightColor', { 1, 0.95, 0.85 })
-  pass:send('shininess', 32)
+  -- 1) Lit geometry: bind the shader, then send uniforms (see src/helper.lua).
+  H.light(pass, lx, ly, lz)
 
   -- Ground. Planes face +Z by default, so rotate -90deg around X to face up.
   pass:setColor(0.35, 0.35, 0.4)
