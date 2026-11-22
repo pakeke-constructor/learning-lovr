@@ -14,6 +14,9 @@ Full lovr source (git repo, with submodules) is at `../LOVR_SOURCE` (`C:\_PROGRA
 If unsure how an API behaves, read the source there. Lua API bindings: `src/api/l_*.c`, core impl: `src/modules/**`.
 NOTE: it tracks the `dev` branch, which may be newer than 0.19.1. Use `git -C ../LOVR_SOURCE show v0.19.1:<path>` for the exact released version.
 
+## LOVR gotchas (since 0.19.0):
+love.math.vec3 no longer pools vectors, and love.math.drain is deprecated.
+
 
 ## GOALS OF THIS PROJECT: LEARNING.
 you are working with an experienced engineer.
@@ -24,7 +27,6 @@ the engineer's main goal is to learn more about lovr, and for the engineer to ge
 has multiple independent "projects", useful for testing and quick iterating.
 ```
 main.lua: entrypoint
-src/proj_1/**: project 1, self-contained program
-src/test_2/**: test 2, self-contained program
-src/<project>/**: (A self-contained project called `<project>`)
+src/projects/<n>_<name>/<n>_<name>.lua: project n, self-contained program (returns a table of callbacks)
+  e.g. src/projects/1_phong/1_phong.lua. Number keys switch project (sorted by folder name).
 ```

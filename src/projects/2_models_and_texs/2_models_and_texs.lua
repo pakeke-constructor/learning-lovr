@@ -1,4 +1,4 @@
--- proj_2: hand-rolled .obj loader + texture, loaded with lovr.task.
+-- 2_models_and_texs: hand-rolled .obj loader + texture, loaded with lovr.task.
 --
 -- A task is a coroutine managed by LOVR's scheduler. When a task calls an *async* function,
 -- it yields; the work runs on a worker thread and the task resumes with the result.
@@ -8,10 +8,10 @@
 -- Task code itself runs on the main thread, so creating the Mesh there is fine.
 
 local H = require('src.helper')
-local parseObj = require('src.projects.proj_2.obj')
+local parseObj = require('src.projects.2_models_and_texs.obj')
 local P = {}
 
-local DIR = 'src/projects/proj_2/'
+local DIR = 'src/projects/2_models_and_texs/'
 local cube, teapot, texture
 
 -- Attribute names match the built-in shader inputs, so the default vertex stage just works.
@@ -33,7 +33,7 @@ end
 
 function P.draw(pass)
   local t = lovr.timer.getTime()
-  pass:text('proj_2: .obj + texture via lovr.task', 0, 2.7, -3, 0.15)
+  pass:text('2_models_and_texs: .obj + texture via lovr.task', 0, 2.7, -3, 0.15)
 
   H.light(pass, 2, 3, 0)
 

@@ -1,4 +1,4 @@
--- proj_3: field of white cubes + SSAO (screen-space ambient occlusion).
+-- 3_ssao: field of white cubes + SSAO (screen-space ambient occlusion).
 --
 -- Pipeline (3 passes per frame, submitted together):
 --   1) gpass  -> gbuf (rgba32f): view-space normal (xyz) + linear view depth (a). Sky = depth 0.

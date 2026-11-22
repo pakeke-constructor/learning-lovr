@@ -107,13 +107,13 @@ Targets and camera:
 - `setClear(r, g, b, a | hex | bool | { colors..., depth, stencil })`
 - `reset()` - clears recorded commands. Call it each frame on a pass you keep around.
 - `setViewPose(view, mat4 | pose, inverted?)`
-- `setProjection(view, mat4)` or `setProjection(view, left, right, up, down, near, far)`
+- `setProjection(view, mat4)` (the number form `left, right, up, down, near, far` is deprecated; build a mat4 with `:fov(...)` instead)
 - `getProjection(view, mat4)` - fills the mat4
 
 Render state:
 - `setBlendMode(index?, mode?, alphaMode?)` - no args turns blending off
 - `setDepthTest(CompareMode?)`, `setDepthWrite(bool)`, `setDepthOffset`, `setDepthClamp`
-- `setCullMode('back' | 'front' | nil)`, `setWinding`
+- `setFaceCull('back' | 'front' | 'none' | bool)` (true = 'back'; `setCullMode` is the deprecated name), `setWinding`
 - `setColorWrite(index?, bool | r, g, b, a)`
 - `setStencilTest`, `setStencilWrite`
 - `setMeshMode('triangles' | 'lines' | 'points')`
@@ -236,7 +236,7 @@ Flags:
 
 
 ## Recipes and gotchas
-Tested in `src/projects/proj_3` (SSAO).
+Tested in `src/projects/3_ssao` (SSAO).
 
 Offscreen pipeline:
 - Once (and on resize): create textures, then `newPass({ tex, depth = 'd32f', samples = 1 })`.

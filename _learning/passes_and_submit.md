@@ -12,7 +12,7 @@ Pass {
     state: { -- kinda like a vk_Pipeline
         shader: Shader, material: Material, font: Font
         color: Color
-        blendMode, depthTest, depthWrite, cullMode, winding, wireframe, stencil, ...
+        blendMode, depthTest, depthWrite, faceCull, winding, wireframe, stencil, ...
     }
 
     camera: Camera -- :setView stuff

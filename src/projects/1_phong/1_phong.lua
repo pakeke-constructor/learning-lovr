@@ -1,4 +1,4 @@
--- proj_1: primitives + passes + basic Phong lighting.
+-- 1_phong: primitives + passes + basic Phong lighting.
 --
 -- How a frame works in LOVR:
 --   lovr.draw(pass) receives a Pass for the window/headset. A Pass is a *recorder*:
@@ -96,7 +96,7 @@ function P.draw(pass)
 
   -- Text uses LOVR's built-in font shader when no custom shader is set.
   pass:setColor(1, 1, 1)
-  pass:text('proj_1: primitives + phong', 0, 2.3, -3, 0.2)
+  pass:text('1_phong: primitives + phong', 0, 2.3, -3, 0.2)
 end
 
 return P
