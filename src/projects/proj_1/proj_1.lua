@@ -1,6 +1,7 @@
+local P = {}
+local world, ground, boxes, controllerBoxes
 
-
-function lovr.load()
+function P.load()
   world = lovr.physics.newWorld()
 
   -- Create the ground
@@ -23,7 +24,7 @@ function lovr.load()
   lovr.graphics.setBackgroundColor(.8, .8, .8)
 end
 
-function lovr.update(dt)
+function P.update(dt)
   -- Update the physics simulation
   world:update(dt)
 
@@ -38,12 +39,12 @@ function lovr.update(dt)
 end
 
 -- A helper function for drawing boxes
-function drawBox(pass, box)
+local function drawBox(pass, box)
   local x, y, z = box:getPosition()
   pass:cube(x, y, z, .25, box:getOrientation())
 end
 
-function lovr.draw(pass)
+function P.draw(pass)
   pass:setShader(shader)
 
   pass:setColor(1, 0, 0)
@@ -58,3 +59,9 @@ function lovr.draw(pass)
     end
   end
 end
+
+function P.cleanup()
+  world:destroy()
+end
+
+return P
