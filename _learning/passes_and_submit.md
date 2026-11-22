@@ -39,17 +39,20 @@ pass:fill(...)
 lovr.graphics.submit(pass1, pass2, pass3)
 
 --[[
-**Insert barriers.** LOVR tracks how each texture was last used.
+## BARRIERS:
+LOVR tracks how each texture was last used.
 
 If a pass reads something an earlier pass wrote, it inserts a barrier:
 finish the writes, then make them readable.
 
-- `pass1` renders into `pass2`.
-- `pass3` samples ``, so there's a barrier before it.
-- The window pass samples `gbuf` and `aoTex`, so there's a barrier before that too.
+Each pass draws into a texture. A later pass can then read that texture.
 
-(In raw Vulkan you'd write these barriers yourself.)
+For example:
+- `pass1` renders into `texA`.
+- `pass2` samples `texA` and renders into `texB`, so there's a barrier before it.
+- `pass3` samples `texA` and `texB`, so there's a barrier before that too.
 
+(In raw Vulkan you'd write these barriers yourself, and probably fuck it up.)
 ]]
 ```
 
