@@ -14,3 +14,11 @@ you are working with an experienced engineer.
 the engineer's main goal is to learn more about lovr, and for the engineer to get a solid grip on the entire lovr pipeline and api (which is pretty minimal.)
 
 
+## architecture:
+has multiple independent "projects", useful for testing and quick iterating.
+```
+main.lua: entrypoint
+src/proj_1/**: project 1, self-contained program
+src/test_2/**: test 2, self-contained program
+src/<project>/**: (A self-contained project called `<project>`)
+```
