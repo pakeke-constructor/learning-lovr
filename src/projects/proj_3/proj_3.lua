@@ -93,7 +93,7 @@ uniform texture2D aoTex;
 uniform float aoOn;
 
 // AO strength: exponent on the blurred AO. 1 = raw, higher = darker.
-const float AO_STRENGTH = 1.8;
+const float AO_STRENGTH = 1.2;
 
 vec4 lovrmain() {
   vec4 g = getPixel(gbuf, UV);

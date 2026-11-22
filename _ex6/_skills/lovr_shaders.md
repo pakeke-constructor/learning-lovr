@@ -3,116 +3,262 @@ name: "lovr_shaders"
 description: "Use for anything to do with LOVR shaders: GLSL builtins, uniforms/buffers/textures, render targets, fullscreen/post passes, compute, flags"
 ---
 
-# LOVR 0.19 shaders: index
+# LOVR 0.19 shaders
 
-Sources: lovr `etc/shaders/lovr.glsl` @v0.19.1 (the prelude itself; treat as ground truth), lovr-docs `guides/Shaders.md`, local API dump `_ex6/lovr_docs/lovr_docs.json` (grep it for anything not covered here).
+Sources:
+- `etc/shaders/lovr.glsl` @v0.19.1 is the ground truth for builtins.
+- `guides/Shaders.md` in lovr-docs. Its attribute location table is out of date.
+- `_ex6/lovr_docs/lovr_docs.json` is a local API dump. Grep it for anything missing here.
 
-## 1. Overall setup
 
-- GLSL 4.60 → compiled to SPIR-V → Vulkan. Coordinate conventions are Vulkan (NDC y down, texture v=0 at top row, depth 0..1).
-- Your source is wrapped by LOVR: `#version 460`, multiview extension, then `#include "lovr.glsl"` (the prelude), then your code. The prelude declares every builtin below and defines `main()`, which calls your `lovrmain()`.
-  - vertex: `vec4 lovrmain()` returns clip position. `main()` has already filled `PositionWorld, Normal, UV, UV2, Color, Tangent` before calling it (you may overwrite them).
-  - fragment: `vec4 lovrmain()` returns color → `PixelColor` (location 0). After it, `main()` applies glow / tonemap / alphaCutoff if those flags are on.
-  - compute: `void lovrmain()`.
-- `{ raw = true }` option: no prelude, no `lovrmain`; write your own `main`.
-- A graphics shader = vertex + fragment. Either stage may be a `DefaultShader` name string, reusing that stage's built-in code: `newShader('unlit', myFrag)`, `newShader(myVert, 'unlit')`, `newShader('fill', myFrag)`.
-- Code args can be a GLSL string, a filename, or a Blob (SPIR-V from `lovr.graphics.compileShader`).
-- Shaders are objects; state lives on the `Pass`: `pass:setShader(s)` → `pass:send(name, value)` → draw calls. `pass:setShader()` (nil) = automatic built-in per draw type (unlit for meshes, font for text...).
-- Binding numbers aren't needed: plain `uniform float x;`, `uniform texture2D t;`, `buffer B {...};` work. LOVR assigns slots and matches `pass:send` by name.
-- `newShader` / `compileShader` are async in 0.19 (changelog). Shaders can be created on any thread or inside `lovr.task`.
-- Compile errors are raised as Lua errors from `newShader`.
+## Setup
 
-## 2. Lua API
+GLSL 4.60, compiled to SPIR-V, run on Vulkan.
+Vulkan conventions: NDC y points down, texture v=0 is the top row, depth is 0..1.
 
-lovr.graphics
-- `newShader(vertex, fragment, options?)`, `newShader(compute, options?)`, `newShader(defaultShader, options?)`
-  - options: `flags` (table name|id → number|bool), `label` (string), `raw` (bool)
-- `compileShader(vertex, fragment)` / `compileShader(compute)` → Blob(s) of SPIR-V
-- `newSampler{ filter = 'linear'|{min,mag,mip}, wrap = 'repeat'|{u,v,w}, compare = CompareMode, anisotropy = 1, mipmaprange = {lo,hi} }`
-- `newPass(...textures)` / `newPass(canvas)` / `newPass()`; canvas = `{ tex1, tex2.., depth = Texture|format|false|{format=,texture=}, samples = 1|4 }`. The depth format defaults to `'d32f'` and samples default to 4.
-- `newTexture(w, h, { format=, mipmaps=, usage = {'sample','render','storage','transfer'}, linear=, label= })`
-- `submit(...passes)`: submits in order. Returning `true` from `lovr.draw` skips the automatic window-pass submit (use it after calling `submit(a, b, windowPass)` yourself).
-- `newBuffer(format, data|count)`, `newRaytracer(capacity, { dynamic, fasttrace, fastbuild, compress })`
+LOVR wraps your code like this:
+```glsl
+#version 460
+// multiview extension
+#include "lovr.glsl"   // declares all builtins, defines main()
+// your code
+```
 
-Shader object
-- `clone(flags)` cheap variant with different flags (no recompile)
-- `getBufferFormat(name)` → format, length. Use it to build a matching `newBuffer`. Single-array and single-struct blocks get unwrapped.
-- `getWorkgroupSize()` → x, y, z · `getType()` → 'graphics'|'compute' · `hasStage(stage)` · `hasAttribute(name|location)` · `hasVariable(name)` · `getLabel()`
+`main()` calls your `lovrmain()`:
+- vertex: `vec4 lovrmain()` returns the clip position. `PositionWorld, Normal, UV, UV2, Color, Tangent` are already set and can be overwritten.
+- fragment: `vec4 lovrmain()` returns the color for `PixelColor`. Afterwards `main()` applies glow, tonemap and alphaCutoff if those flags are on.
+- compute: `void lovrmain()`.
+- With `{ raw = true }` there is no prelude and no `lovrmain`. Write your own `main`.
 
-Pass (shader-relevant)
-- `setShader(shader|DefaultShader|nil)`
-- `send(name, number|bool|table|vector|matrix)` uniform; `send(name, Texture)`; `send(name, Sampler)`; `send(name, Buffer, offset?, extent?)`. Values persist across `setShader` if the name and type still match.
-- `setSampler(Sampler | 'nearest' | 'linear' | 'cubic')`: the sampler used by `getPixel` / `Sampler`
-- `fill(texture?)`: fullscreen triangle. With a custom shader set, it runs that shader (build it with `newShader('fill', frag)`).
-- `compute(x, y, z)` / `compute(buffer, offset)` (indirect). All computes in a Pass run before its draws, in parallel unless `pass:barrier()` is between them.
-- `setCanvas(...)`, `getCanvas()`, `setClear(r,g,b,a | hex | bool | {colors..., depth=, stencil=})`, `reset()` (re-record a retained pass each frame)
-- `setViewPose(view, mat4|pose[, inverted])`, `setProjection(view, mat4 | left,right,up,down,near,far)`, `getProjection(view, mat4)` → fills mat4 (copy the window's projection to offscreen passes)
-- Render state: `setBlendMode([index,] mode?, alphaMode?)` (no args = blending off), `setDepthTest(CompareMode?)`, `setDepthWrite(bool)`, `setDepthOffset`, `setDepthClamp`, `setCullMode('back'|'front'|nil)`, `setWinding`, `setColorWrite([index,] bool | r,g,b,a)`, `setStencilTest`, `setStencilWrite`, `setMeshMode('triangles'|'lines'|'points')`, `setViewCull(bool)`, `setWireframe(bool)`, `setMaterial(Material|Texture|nil)`, `setColor(...)`
+Minimal example:
+```lua
+local shader = lovr.graphics.newShader('unlit', [[
+  uniform vec4 tint;
+  vec4 lovrmain() { return DefaultColor * tint; }
+]])
 
-Enums
-- DefaultShader: `unlit normal font cubemap equirect fill`
-- ShaderType: `graphics compute` · ShaderStage: `vertex fragment compute`
-- ShaderFlag (builtin, constant_id ≥ 1000; set via `flags = {}`): `pointSize(1) passColor(T) materialColor(T) vertexColors(T) uvTransform(T) alphaCutoff(F) glow(F) normalMap(F) vertexTangents(T) colorTexture(T) glowTexture(T) metalnessTexture(T) roughnessTexture(T) ambientOcclusion(T) clearcoatTexture(F) tonemap(F)`
+function lovr.draw(pass)
+  pass:setShader(shader)
+  pass:send('tint', { 1, .5, .5, 1 })
+  pass:cube(0, 1.7, -2)
+  pass:setShader()
+end
+```
 
-## 3. GLSL builtins (from lovr.glsl)
+Rules:
+- A graphics shader has a vertex and a fragment stage. Either one can be a DefaultShader name to reuse the built-in stage: `newShader('unlit', frag)`, `newShader(vert, 'unlit')`, `newShader('fill', frag)`.
+- Stage code can be a GLSL string, a filename, or a Blob of SPIR-V from `compileShader`.
+- All state lives on the Pass. `setShader(nil)` goes back to the automatic built-in shader for each draw type.
+- No binding numbers needed. Declare `uniform float x;`, `uniform texture2D t;`, `buffer B {...};` and `pass:send` matches by name.
+- Compile errors are thrown as Lua errors from `newShader`.
+- `newShader` and `compileShader` are async in 0.19 and work on any thread or in `lovr.task`.
 
-Globals (vertex + fragment)
-- `vec2 Resolution` (current pass canvas size, px) · `float Time`
-- `sampler Sampler` (from `Pass:setSampler`)
-- `int ViewIndex` (multiview eye; 0 on desktop)
-- Camera macros: `View`, `Projection`, `ViewProjection`, `InverseProjection` (mat4, from `Cameras[ViewIndex]`), `vec3 CameraPositionWorld`. These work in the fragment stage too.
-- Constants: `PI`, `TAU`, `PI_2`
-- `ClipDistance`, `CullDistance`, `PrimitiveID`
 
-Vertex-only
-- Attributes (location): `vec4 VertexPosition(10)`, `vec3 VertexNormal(11)`, `vec2 VertexUV(12)`, `vec2 VertexUV2(13)`, `vec4 VertexColor(14)`, `vec4 VertexTangent(15)` (w = handedness). The guide's location table is stale; these numbers are from lovr.glsl.
-- Custom attributes: `in vec3 myAttr;` matched by name to a Buffer/Mesh format field.
-- Matrices: `Transform` (= `WorldFromLocal`), `NormalMatrix` (mat3), `PassColor` (vec4)
-- Space macros: `ClipFromLocal ClipFromWorld ClipFromView ViewFromLocal ViewFromWorld ViewFromClip WorldFromLocal WorldFromView WorldFromClip`
-- `DefaultPosition` = `ClipFromLocal * VertexPosition`
-- `VertexIndex InstanceIndex BaseVertex BaseInstance DrawIndex PointSize Position`
+## Lua API
 
-Fragment-only
-- Varyings (in): `vec3 PositionWorld`, `vec3 Normal` (world, not normalized), `vec2 UV`, `vec2 UV2`, `vec4 Color` (= pass × material × vertex color, depending on flags), `vec4 Tangent`
-- `DefaultColor` = `Color * getPixel(ColorTexture, UV)` · `mat3 TangentMatrix`
-- `FragCoord FragDepth FrontFacing PointCoord SampleID SampleMask SampleMaskIn SamplePosition`
-- Output: `PixelColor` (location 0, = lovrmain return). Extra render targets: declare `layout(location = 1) out vec4 second;` and write it inside lovrmain. They map to the canvas textures in order.
+### lovr.graphics
+- `newShader(vertex, fragment, options?)`
+- `newShader(compute, options?)`
+- `newShader(defaultShader, options?)`
+- options: `flags = { name|id = number|bool }`, `label = string`, `raw = bool`
+- `compileShader(vertex, fragment)` or `compileShader(compute)` returns SPIR-V Blobs
+- `newSampler{ filter, wrap, compare, anisotropy, mipmaprange }`
+  - filter: `'linear'` or `{ min, mag, mip }`
+  - wrap: `'repeat'` or `{ u, v, w }`
+  - compare: CompareMode
+  - anisotropy: default 1
+  - mipmaprange: `{ lo, hi }`
+- `newTexture(w, h, { format, mipmaps, usage, linear, label })`
+  - usage: any of `'sample', 'render', 'storage', 'transfer'`
+- `newPass(...textures)`, `newPass(canvas)`, `newPass()`
+  - canvas: `{ tex1, tex2, ..., depth = ..., samples = 1|4 }`
+  - depth: Texture, format, false, or `{ format, texture }`. Default `'d32f'`.
+  - samples: default 4
+- `newBuffer(format, data|count)`
+- `newRaytracer(capacity, { dynamic, fasttrace, fastbuild, compress })`
+- `submit(...passes)` submits in order. Return `true` from `lovr.draw` to skip the automatic window pass submit.
 
-Compute-only
-- `layout(local_size_x = 8, local_size_y = 8) in;` (you declare it)
-- `GlobalThreadID LocalThreadID LocalThreadIndex WorkgroupID WorkgroupSize WorkgroupCount SubgroupCount`
+### Shader
+- `clone(flags)` - new variant with different flags, no recompile
+- `getBufferFormat(name)` - returns format, length. Use it to build a matching Buffer. Blocks containing a single array or struct are unwrapped.
+- `getWorkgroupSize()` - x, y, z
+- `getType()` - `'graphics'` or `'compute'`
+- `hasStage(stage)`
+- `hasAttribute(name|location)`
+- `hasVariable(name)`
+- `getLabel()`
 
-Material (from `Pass:setMaterial`; a Texture passed there becomes ColorTexture)
-- `Material.color glow(vec4, a=strength) uvShift uvScale sdfRange metalness roughness clearcoat clearcoatRoughness occlusionStrength normalScale alphaCutoff`
-- Textures: `ColorTexture GlowTexture MetalnessTexture(b) RoughnessTexture(g) ClearcoatTexture(r) OcclusionTexture(r) NormalTexture`. Defaults are 1x1 white (normal map: flat).
+### Pass
+Shader and resources:
+- `setShader(shader | DefaultShader | nil)`
+- `send(name, value)` - value is number, bool, table, vector, matrix, Texture or Sampler. Values stay bound across `setShader` if name and type match.
+- `send(name, buffer, offset?, extent?)`
+- `setSampler(Sampler | 'nearest' | 'linear' | 'cubic')` - the sampler behind `Sampler` and `getPixel`
+- `setMaterial(Material | Texture | nil)`
 
-Helper functions
-- Sampling with the pass sampler: `getPixel(texture2D, vec2)`, `(texture3D, vec3)`, `(textureCube, vec3)`, `(texture2DArray, vec2, float layer)`, `(textureCubeArray, vec4)`. The same overloads accept a combined `sampler2D(...)` etc. for a custom `uniform sampler`.
-- Raw: `texture(sampler2D(tex, Sampler), uv)`; `texelFetch(tex, ivec2, lod)` needs `#extension GL_EXT_samplerless_texture_functions : require`.
-- PBR: `struct Surface`, `getDefaultSurface()`, `newSurface()`, `applyMaterial(inout s)`, `finalizeSurface(inout s)`, `getLighting(s, vec3 lightDir, vec4 color, float visibility)`, `getIndirectLighting(s, textureCube env, vec3 sh[9])`, `D_GGX`, `G_SmithGGXCorrelated`, `F_Schlick`, `prefilteredBRDF`, `evaluateSphericalHarmonics`
-- Color: `tonemap` (ACES), `gammaToLinear`, `linearToGamma`, `pqToLinear`, `linearToPQ`, `sRGBToRec2020`, `rec2020ToSRGB`
-- Packing: `packSnorm10x3(vec4)`, `unpackSnorm10x3(uint)`
-- Matrix: `cofactor3(mat4x3)` (vertex)
+Draw and compute:
+- `fill(texture?)` - fullscreen triangle. Runs the current custom shader if set; build it with `newShader('fill', frag)`.
+- `compute(x, y, z)`
+- `compute(buffer, offset)` - indirect
+- All computes in a Pass run before its draws, in parallel unless separated by `pass:barrier()`.
 
-Resource declarations (all bound with `pass:send(name, ...)`)
-- `uniform float/vec*/mat*/arrays`: loose uniforms. Send a number, a table, or a vector/matrix object. Arrays and structs are sent as tables (unverified here).
-- `uniform Block { ... };` uniform buffer · `buffer Block { ... };` storage buffer (writable in compute). Add `layout(scalar)` to drop std140/std430 padding rules.
-- `uniform texture2D|texture3D|textureCube|texture2DArray|textureCubeArray|texture2DMS name;` (needs a texture with usage 'sample')
-- `layout(rgba8) uniform image2D name;` storage image (usage 'storage')
+Targets and camera:
+- `setCanvas(...)`, `getCanvas()`
+- `setClear(r, g, b, a | hex | bool | { colors..., depth, stencil })`
+- `reset()` - clears recorded commands. Call it each frame on a pass you keep around.
+- `setViewPose(view, mat4 | pose, inverted?)`
+- `setProjection(view, mat4)` or `setProjection(view, left, right, up, down, near, far)`
+- `getProjection(view, mat4)` - fills the mat4
+
+Render state:
+- `setBlendMode(index?, mode?, alphaMode?)` - no args turns blending off
+- `setDepthTest(CompareMode?)`, `setDepthWrite(bool)`, `setDepthOffset`, `setDepthClamp`
+- `setCullMode('back' | 'front' | nil)`, `setWinding`
+- `setColorWrite(index?, bool | r, g, b, a)`
+- `setStencilTest`, `setStencilWrite`
+- `setMeshMode('triangles' | 'lines' | 'points')`
+- `setViewCull(bool)`, `setWireframe(bool)`, `setColor(...)`
+
+### Enums
+- DefaultShader: `unlit, normal, font, cubemap, equirect, fill`
+- ShaderType: `graphics, compute`
+- ShaderStage: `vertex, fragment, compute`
+- Builtin flags (constant_id 1000+, default in brackets):
+  `pointSize [1], passColor [T], materialColor [T], vertexColors [T], uvTransform [T], alphaCutoff [F], glow [F], normalMap [F], vertexTangents [T], colorTexture [T], glowTexture [T], metalnessTexture [T], roughnessTexture [T], ambientOcclusion [T], clearcoatTexture [F], tonemap [F]`
+
+
+## GLSL builtins
+
+### All graphics stages
+- `vec2 Resolution` - canvas size in pixels
+- `float Time`
+- `sampler Sampler` - set by `Pass:setSampler`
+- `int ViewIndex` - multiview eye, 0 on desktop
+- `mat4 View, Projection, ViewProjection, InverseProjection`
+- `vec3 CameraPositionWorld`
+- `PI, TAU, PI_2`
+- `ClipDistance, CullDistance, PrimitiveID`
+
+### Vertex
+Attributes (location):
+- `vec4 VertexPosition` (10)
+- `vec3 VertexNormal` (11)
+- `vec2 VertexUV` (12)
+- `vec2 VertexUV2` (13)
+- `vec4 VertexColor` (14)
+- `vec4 VertexTangent` (15) - w is handedness
+- Custom: `in vec3 myAttr;` matches a Buffer/Mesh format field by name.
+
+Other:
+- `mat4 Transform` - same as `WorldFromLocal`
+- `mat3 NormalMatrix`
+- `vec4 PassColor`
+- Matrices: `ClipFromLocal, ClipFromWorld, ClipFromView, ViewFromLocal, ViewFromWorld, ViewFromClip, WorldFromLocal, WorldFromView, WorldFromClip`
+- `DefaultPosition` - `ClipFromLocal * VertexPosition`
+- `VertexIndex, InstanceIndex, BaseVertex, BaseInstance, DrawIndex, PointSize, Position`
+
+### Fragment
+Inputs:
+- `vec3 PositionWorld`
+- `vec3 Normal` - world space, not normalized
+- `vec2 UV, UV2`
+- `vec4 Color` - pass color x material color x vertex color, depending on flags
+- `vec4 Tangent`
+
+Other:
+- `DefaultColor` - `Color * getPixel(ColorTexture, UV)`
+- `mat3 TangentMatrix`
+- `FragCoord, FragDepth, FrontFacing, PointCoord, SampleID, SampleMask, SampleMaskIn, SamplePosition`
+
+Outputs:
+- `PixelColor` - location 0, the `lovrmain` return value
+- Extra targets: declare `layout(location = 1) out vec4 second;` and write it in `lovrmain`. Locations map to canvas textures in order.
+
+### Compute
+- Declare `layout(local_size_x = 8, local_size_y = 8) in;` yourself.
+- `GlobalThreadID, LocalThreadID, LocalThreadIndex, WorkgroupID, WorkgroupSize, WorkgroupCount, SubgroupCount`
+
+### Material
+Set by `Pass:setMaterial`. A plain Texture becomes `ColorTexture`.
+- `Material.color, glow, uvShift, uvScale, sdfRange, metalness, roughness, clearcoat, clearcoatRoughness, occlusionStrength, normalScale, alphaCutoff`
+- `Material.glow.a` is the glow strength.
+- Textures: `ColorTexture, GlowTexture, MetalnessTexture (b), RoughnessTexture (g), ClearcoatTexture (r), OcclusionTexture (r), NormalTexture`
+- Unset textures are 1x1 white. The normal map default is flat.
+
+### Functions
+Sampling with the pass sampler:
+- `getPixel(texture2D, vec2)`
+- `getPixel(texture3D, vec3)`
+- `getPixel(textureCube, vec3)`
+- `getPixel(texture2DArray, vec2, float layer)`
+- `getPixel(textureCubeArray, vec4)`
+- Same overloads take a combined `sampler2D(tex, mySampler)` etc.
+
+Raw sampling:
+- `texture(sampler2D(tex, Sampler), uv)`
+- `texelFetch(tex, ivec2, lod)` needs `#extension GL_EXT_samplerless_texture_functions : require`
+
+PBR:
+- `struct Surface`, `getDefaultSurface()`, `newSurface()`
+- `applyMaterial(inout s)`, `finalizeSurface(inout s)`
+- `getLighting(s, vec3 lightDir, vec4 color, float visibility)`
+- `getIndirectLighting(s, textureCube env, vec3 sh[9])`
+- `D_GGX, G_SmithGGXCorrelated, F_Schlick, prefilteredBRDF, evaluateSphericalHarmonics`
+
+Color:
+- `tonemap` (ACES), `gammaToLinear, linearToGamma, pqToLinear, linearToPQ, sRGBToRec2020, rec2020ToSRGB`
+
+Misc:
+- `packSnorm10x3(vec4)`, `unpackSnorm10x3(uint)`
+- `cofactor3(mat4x3)` - vertex only
+
+### Resource declarations
+All bound with `pass:send(name, ...)`.
+- `uniform float x;` (or vec, mat, array) - send a number, table, or vector/matrix. Arrays and structs as tables is untested.
+- `uniform Block { ... };` - uniform buffer
+- `buffer Block { ... };` - storage buffer, writable in compute
+- `layout(scalar)` on a block drops std140/std430 padding.
+- `uniform texture2D name;` - also `texture3D, textureCube, texture2DArray, textureCubeArray, texture2DMS`. Texture needs usage `'sample'`.
+- `layout(rgba8) uniform image2D name;` - storage image. Texture needs usage `'storage'`.
 - `uniform sampler name;`
-- `uniform raytracer name;` (= accelerationStructureEXT). Query it with `rayQueryEXT` / `rayQueryInitializeEXT(q, name, flags, 0xff, origin, tmin, dir, tmax)` / `rayQueryProceedEXT` / `rayQueryGetIntersectionTypeEXT`.
-- Flags: `layout(constant_id = N) const bool|int|float flag_name = default;` with N < 1000. Override with `newShader(..., { flags = { name = v } })` or `shader:clone{...}` (the `flag_` prefix is stripped).
+- `uniform raytracer name;` - an `accelerationStructureEXT`. Query with `rayQueryEXT`, `rayQueryInitializeEXT(q, name, flags, 0xff, origin, tmin, dir, tmax)`, `rayQueryProceedEXT`, `rayQueryGetIntersectionTypeEXT`.
 
-Built-in stage sources (for copying)
-- `fill.vert`: fullscreen triangle from `VertexIndex`, `UV = ndc*.5+.5`, z=1. Projecting a view-space point with `Projection` gives `uv = clip.xy/clip.w*.5+.5`, which matches this UV.
-- `unlit`: `DefaultPosition` / `DefaultColor` · `normal.frag`: `normalize(Normal)*.5+.5` · `cubemap`/`equirect`: skybox (use with `pass:skybox`) · `font.frag`: MSDF using `Material.sdfRange`
+Flags:
+- `layout(constant_id = N) const bool|int|float flag_name = default;` with N < 1000
+- Set with `newShader(..., { flags = { name = v } })` or `shader:clone{ name = v }`. The `flag_` prefix is dropped.
 
-## 4. Recipes / gotchas (verified in this repo, src/projects/proj_3 = SSAO)
+### Built-in stage sources
+- `fill.vert` - fullscreen triangle from `VertexIndex`, `UV = ndc * .5 + .5`, z = 1
+- `unlit` - `DefaultPosition` and `DefaultColor`
+- `normal.frag` - `normalize(Normal) * .5 + .5`
+- `cubemap`, `equirect` - skybox, use with `pass:skybox`
+- `font.frag` - MSDF using `Material.sdfRange`
 
-- Offscreen pipeline: create textures + `newPass({tex, depth='d32f', samples=1})` once (recreate on resize). Each frame: `p:reset()`, `p:setClear(...)`, copy the camera (`setViewPose`, `setProjection` from `windowPass:getProjection(1, mat4)`), record, then `lovr.graphics.submit(p1, p2, windowPass); return true`.
-- G-buffer packing data in alpha: call `pass:setBlendMode()` (off) first. Default blending is alpha and will mangle the data.
-- Use `rgba32f` when storing depth; 16f loses precision at distance. Read exact texels with `pass:setSampler('nearest')`.
-- Sampling textures you render to needs `samples = 1` on that pass (or let MSAA resolve). A texture needs `usage = {'render','sample'}`.
-- View-space normal: `mat3(View) * normalize(Normal)`; linear depth: `-(View * vec4(PositionWorld,1)).z`.
-- Reconstruct the view position from UV + linear depth: `p = InverseProjection * vec4(uv*2-1, .5, 1); p.xyz /= p.w; pos = p.xyz * (depth / -p.z)`.
-- `Pass:setClear` defaults to transparent black for new passes. Set it explicitly after `reset()`.
+
+## Recipes and gotchas
+Tested in `src/projects/proj_3` (SSAO).
+
+Offscreen pipeline:
+- Once (and on resize): create textures, then `newPass({ tex, depth = 'd32f', samples = 1 })`.
+- Each frame: `p:reset()`, `p:setClear(...)`, copy the camera, record draws.
+- Copy the camera: `setViewPose` the same as the window. `windowPass:getProjection(1, m)` fills mat4 `m`, then `p:setProjection(1, m)`.
+- Submit: `lovr.graphics.submit(p1, p2, windowPass)` then `return true` from `lovr.draw`.
+
+Gotchas:
+- New passes clear to transparent black. Set `setClear` after `reset()`.
+- Data in alpha gets mangled by default alpha blending. Call `pass:setBlendMode()` first.
+- Store depth in `rgba32f`. 16f loses precision at distance.
+- Read exact texels with `pass:setSampler('nearest')`.
+- To sample a render target, render it with `samples = 1` and give it `usage = { 'render', 'sample' }`.
+- `Projection`-based UV `clip.xy / clip.w * .5 + .5` matches the fill UV.
+
+Snippets:
+```glsl
+vec3 nView = mat3(View) * normalize(Normal);
+float linearDepth = -(View * vec4(PositionWorld, 1)).z;
+
+// view position from uv + linear depth
+vec4 p = InverseProjection * vec4(uv * 2 - 1, .5, 1);
+p.xyz /= p.w;
+vec3 pos = p.xyz * (depth / -p.z);
+```
