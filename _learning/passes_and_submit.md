@@ -8,7 +8,8 @@ Pass {
     drawCommands: DrawCommand[] -- turned into a vk_CommandBuffer
 
     transform: Mat4;
-    state: {
+
+    state: { -- kinda like a vk_Pipeline
         shader: Shader, material: Material, font: Font
         color: Color
         blendMode, depthTest, depthWrite, cullMode, winding, wireframe, stencil, ...
