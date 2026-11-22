@@ -5,16 +5,19 @@
 A pass is *essentially* just a bunch of draw-commands, and a texture:
 ```lua
 Pass {
-    drawCommands: DrawCommand[] -- vk_CommandBuffer
+    drawCommands: DrawCommand[] -- turned into a vk_CommandBuffer
 
-    transform: Transform;
-    color: Color
+    transform: Mat4;
+    color: Color; blendMode: BlendMode, depthTest: DepthTest
 
-    view: View -- this is pretty much just the camera.
-    -- (some passes can have multi views, e.g. cubemap renderer)
+    camera: Camera -- :setView stuff
+    -- (can have multiple, e.g. cubemap renderer)
 
     shader: Shader?
     texture: Texture? -- like a canvas
+
+    _access: Access[] -- PRIVATE FIELD: tracks every texture/buffer that was touched.
+    -- (submit uses it for barriers)
 }
 ```
 
@@ -40,12 +43,13 @@ lovr.graphics.submit(pass1, pass2, pass3)
 
 --[[
 ## BARRIERS:
-LOVR tracks how each texture was last used.
+LOVR tracks how each texture was last used within a pass.
 
-If a pass reads something an earlier pass wrote, it inserts a barrier:
-finish the writes, then make them readable.
+If pass_B reads a texture an earlier pass (eg pass_A) wrote, it inserts a barrier:
+finish the writes on pass_A first, then make them readable for pass_B.
 
-Each pass draws into a texture. A later pass can then read that texture.
+(Basically: Each pass draws into a texture. A later pass can then read that texture.)
+if passes don't share any textures, they will be submitted in parallel.
 
 For example:
 - `pass1` renders into `texA`.
