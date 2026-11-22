@@ -38,4 +38,7 @@ function lovr.mousemoved(...)
 end
 
 function lovr.load() switch(projects[1]) end
-function lovr.keypressed(key) switch(projects[tonumber(key)]) end
+function lovr.keypressed(key, ...)
+  switch(projects[tonumber(key)])
+  if current.keypressed then current.keypressed(key, ...) end
+end
