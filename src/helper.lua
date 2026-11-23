@@ -59,12 +59,13 @@ H.camera = cam
 function cam.set(x, y, z, yaw, pitch)
   cam.x, cam.y, cam.z = x or 0, y or 1.7, z or 0
   cam.yaw, cam.pitch = yaw or 0, pitch or 0
+  cam.speed = 1 -- multiplier; projects with big worlds raise it after set()
 end
 cam.set()
 
 function cam.update(dt)
   local down = lovr.system.isKeyDown
-  local speed = (down('lshift', 'rshift') and 8 or 3) * dt
+  local speed = (down('lshift', 'rshift') and 8 or 3) * cam.speed * dt
   local f = (down('w') and 1 or 0) - (down('s') and 1 or 0)
   local r = (down('d') and 1 or 0) - (down('a') and 1 or 0)
   local s, c = math.sin(cam.yaw), math.cos(cam.yaw)

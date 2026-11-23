@@ -3,7 +3,7 @@ local cam = H.camera
 
 local projects, current = {}, {}
 local dirs = lovr.filesystem.getDirectoryItems("src/projects")
-table.sort(dirs)
+table.sort(dirs, function(a, b) return tonumber(a:match("^%d+")) < tonumber(b:match("^%d+")) end)
 for _, name in ipairs(dirs) do
   table.insert(projects, require("src.projects." .. name .. "." .. name))
 end
@@ -36,8 +36,9 @@ function lovr.mousemoved(...)
   if current.mousemoved then current.mousemoved(...) end
 end
 
-function lovr.load() switch(projects[1]) end
+-- PROJECT=10 lovr . -> start in project 10
+function lovr.load() switch(projects[tonumber(os.getenv("PROJECT") or "") or 1]) end
 function lovr.keypressed(key, ...)
-  switch(projects[tonumber(key)])
+  switch(projects[key == "0" and 10 or tonumber(key)])
   if current.keypressed then current.keypressed(key, ...) end
 end

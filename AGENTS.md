@@ -28,5 +28,6 @@ has multiple independent "projects", useful for testing and quick iterating.
 ```
 main.lua: entrypoint
 src/projects/<n>_<name>/<n>_<name>.lua: project n, self-contained program (returns a table of callbacks)
-  e.g. src/projects/1_phong/1_phong.lua. Number keys switch project (sorted by folder name).
+  e.g. src/projects/1_phong/1_phong.lua. Number keys switch project (sorted by numeric prefix, key 0 = project 10). `PROJECT=n lovr .` starts in project n.
+.workspace/**: A scratchpad workspace: put temporary scripts, screenshots, or logs here
 ```
