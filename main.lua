@@ -17,8 +17,7 @@ local function switch(p)
 end
 
 function lovr.mousepressed(...)
-  cam.mousepressed(...)
-  if current.mousepressed then current.mousepressed(...) end
+  if not (current.mousepressed and current.mousepressed(...)) then cam.mousepressed(...) end
 end
 
 function lovr.update(dt)
