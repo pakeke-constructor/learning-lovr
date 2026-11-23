@@ -1,3 +1,17 @@
+
+--[[
+
+SHADOW MAPPING EXPLANATION:
+
+put a camera where the light(s) are.
+Anything that camera(s) can see is lit up. Anything it can't see is in shadow.
+
+Then, do a second pass with the real camera.
+
+]]
+
+
+
 -- 7_shadow_mapping: one directional "sun" light casting shadows.
 --
 -- Two passes per frame, submitted together:
