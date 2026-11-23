@@ -1,9 +1,9 @@
--- 5_models: glTF via lovr.graphics.newModel: node hierarchy, materials, animation, clones.
+-- 5_models_and_rigging: glTF via lovr.graphics.newModel: node hierarchy, materials, animation, clones.
 -- Fox.glb: Khronos glTF-Sample-Assets (CC-BY 4.0, PixelMannen / tomkranis / @AsoboStudio). Skinned, 3 animations.
 -- Keys: Space = crossfade main fox to next animation, K = toggle skeleton, H = toggle head override.
 local H = require("src.helper")
 local P = {}
-local DIR = 'src/projects/5_models/'
+local DIR = 'src/projects/5_models_and_rigging/'
 local S = 0.01 -- Fox is authored in cm (~79 units tall)
 
 local fox, plain, clones
@@ -129,7 +129,7 @@ function P.draw(pass)
   end
 
   local fade = prev and ('  <- ' .. fox:getAnimationName(prev)) or ''
-  pass:text('5_models: lovr.graphics.newModel(Fox.glb)', 0, 2.6, z, 0.15)
+  pass:text('5_models_and_rigging: lovr.graphics.newModel(Fox.glb)', 0, 2.6, z, 0.15)
   pass:text(('main: %s%s   [Space] next  [K] skeleton  [H] head override  [T] print node tree'):format(
     fox:getAnimationName(anim), fade), 0, 2.3, z, 0.08)
   for i in ipairs(clones) do
