@@ -167,14 +167,14 @@ local FACES = {
   { math.pi, 0, 1, 0 }, { 0, 0, 1, 0 },
 }
 
-local litShader, gbufferShader, aoShader
+local litShader, gbufferShader, aoShader, teapot
 local probeBuf, gbuf, aoTex, gpass, aopass
 local width, height
 local light = { -2, 2, 0 }
 local aoOn, ambientOnly = true, false
 
--- Geometry only: callers pick the shader. sphereX = nil leaves out the moving sphere (bake = static only).
-local function drawScene(p, sphereX)
+-- Geometry only: callers pick the shader. sphereX = nil leaves out the dynamic objects (bake = static only).
+local function drawScene(p, sphereX, teapotAngle)
   local h = 2.5
   p:setColor(0.6, 0.6, 0.6)
   p:box(0, -0.1, 0, 16, 0.2, 8)
@@ -192,6 +192,7 @@ local function drawScene(p, sphereX)
   if sphereX then
     p:setColor(1, 1, 1)
     p:sphere(sphereX, 0.6, 0, 0.6) -- resting on the floor: contact shadow for SSAO
+    p:draw(teapot, -5, 0, -2.2, 0.45, teapotAngle, 0, 1, 0) -- red corner: watch red/sky bounce sweep over it
   end
 end
 
@@ -254,6 +255,12 @@ function P.load()
   gbufferShader = lovr.graphics.newShader('unlit', gbufferFragment)
   aoShader = lovr.graphics.newShader('fill', aoFragment)
   probeBuf = lovr.graphics.newBuffer('vec4', NX * NY * NZ * 6)
+  local parseObj = require('src.projects.2_models_and_texs.obj')
+  teapot = lovr.graphics.newMesh({
+    { 'VertexPosition', 'vec3' },
+    { 'VertexNormal', 'vec3' },
+    { 'VertexUV', 'vec2' },
+  }, parseObj(lovr.filesystem.read('src/projects/2_models_and_texs/teapot.obj')))
   resize(lovr.system.getWindowDimensions()) -- the lit shader needs gbuf/aoTex bound, even while baking
   bake()
 end
@@ -262,7 +269,9 @@ function P.draw(pass)
   local w, h = pass:getDimensions()
   if w ~= width or h ~= height then resize(w, h) end
   local proj = pass:getProjection(1, lovr.math.mat4())
-  local sphereX = math.sin(lovr.timer.getTime() * 0.4) * 6.5
+  local t = lovr.timer.getTime()
+  local sphereX = math.sin(t * 0.4) * 6.5
+  local teapotAngle = t * 0.5
 
   -- 1) G-buffer, same camera as the window.
   gpass:reset()
@@ -271,7 +280,7 @@ function P.draw(pass)
   H.camera.apply(gpass)
   gpass:setBlendMode()
   gpass:setShader(gbufferShader)
-  drawScene(gpass, sphereX)
+  drawScene(gpass, sphereX, teapotAngle)
 
   -- 2) Raw SSAO.
   aopass:reset()
@@ -283,7 +292,7 @@ function P.draw(pass)
 
   -- 3) Lit scene: probes * AO.
   useLit(pass, false)
-  drawScene(pass, sphereX)
+  drawScene(pass, sphereX, teapotAngle)
 
   pass:setShader()
   pass:setColor(1, 1, 0.7)
