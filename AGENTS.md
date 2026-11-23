@@ -5,7 +5,7 @@
 This is a project to learn LOVR (https://lovr.org).
 LOVR is a simple and thin 3d rendering library for lua, originally intended for VR, now it has enough features to be used in proper 3d games.
 
-Lovr version: `LOVR 0.19.1 (Forbidden Jorts)`.kl
+Lovr version: `LOVR 0.19.1 (Forbidden Jorts)`.
 
 
 
@@ -15,7 +15,7 @@ If unsure how an API behaves, read the source there. Lua API bindings: `src/api/
 NOTE: it tracks the `dev` branch, which may be newer than 0.19.1. Use `git -C ../LOVR_SOURCE show v0.19.1:<path>` for the exact released version.
 
 ## LOVR gotchas (since 0.19.0):
-love.math.vec3 no longer pools vectors, and love.math.drain is deprecated.
+lovr.math.vec3 no longer pools vectors, and lovr.math.drain is deprecated.
 
 
 ## GOALS OF THIS PROJECT: LEARNING.

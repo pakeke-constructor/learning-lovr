@@ -14,7 +14,7 @@
 local H = require('src.helper')
 local P = {}
 
-local gbufferFragment = [[
+local gbufferFragment = --[[glsl]] [[
 vec4 lovrmain() {
   vec3 n = normalize(mat3(View) * normalize(Normal));
   float depth = -(View * vec4(PositionWorld, 1.)).z;
@@ -22,7 +22,7 @@ vec4 lovrmain() {
 }
 ]]
 
-local aoFragment = [[
+local aoFragment = --[[glsl]] [[
 uniform texture2D gbuf;
 
 // 4x4 Bayer index -> per-pixel rotation; the composite's 4x4 blur averages it back out.
@@ -87,7 +87,7 @@ vec4 lovrmain() {
 }
 ]]
 
-local compositeFragment = [[
+local compositeFragment = --[[glsl]] [[
 uniform texture2D gbuf;
 uniform texture2D aoTex;
 uniform float aoOn;

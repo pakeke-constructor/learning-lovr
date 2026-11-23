@@ -5,7 +5,7 @@ local H = {}
 
 -- Vertex stage: DefaultPosition = Projection * View * Transform * VertexPosition.
 -- LOVR also fills varyings for us: PositionWorld, Normal (world space), Color, UV.
-local phongVertex = [[
+local phongVertex = --[[glsl]] [[
 vec4 lovrmain() {
   return DefaultPosition;
 }
@@ -14,7 +14,7 @@ vec4 lovrmain() {
 -- Fragment stage: classic Phong = ambient + diffuse + specular, on top of texture * color.
 -- Loose uniforms get set from Lua with pass:send(name, value).
 -- `Color` already contains pass:setColor() * vertex color.
-local phongFragment = [[
+local phongFragment = --[[glsl]] [[
 uniform vec3 lightPos;
 uniform vec3 lightColor;
 uniform float shininess;
@@ -36,6 +36,7 @@ vec4 lovrmain() {
 }
 ]]
 
+H.phongFragment = phongFragment -- reuse with a custom vertex stage (e.g. instancing)
 local phong
 
 -- Bind the phong shader on `pass` and send light uniforms.
